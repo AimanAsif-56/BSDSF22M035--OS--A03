@@ -1,22 +1,29 @@
 #include "shell.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 int main() {
     char* cmdline;
-    char** arglist;
+    char** args;
 
-    while ((cmdline = read_cmd(PROMPT, stdin)) != NULL) {
-        if ((arglist = tokenize(cmdline)) != NULL) {
-            execute(arglist);
+    while (1) {
+        cmdline = read_cmd("FCIT> ");
+        if (cmdline == NULL) break; // Ctrl+D
 
-            // Free the memory allocated by tokenize()
-            for (int i = 0; arglist[i] != NULL; i++) {
-                free(arglist[i]);
-            }
-            free(arglist);
+        args = tokenize(cmdline);
+        if (args == NULL) {
+            free(cmdline);
+            continue;
         }
-        free(cmdline);
+
+        execute_command(args);
+
+        // Free memory safely
+        free(args);      // free array of pointers
+        free(cmdline);   // free the command line string
     }
 
-    printf("\nShell exited.\n");
+    printf("\n");
     return 0;
 }
+

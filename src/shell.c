@@ -1,66 +1,56 @@
-include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <strings.h>
+#include <stdio.h>      // printf, fprintf, stderr, perror
+#include <stdlib.h>     // malloc, free, exit
+#include <string.h>     // strtok, strlen, strcmp
+#include <unistd.h>     // chdir, fork, execvp
+#include <sys/types.h>  // pid_t
+#include <sys/wait.h>   // wait
 
 #define MAX_LEN 1024
 #define MAXARGS 64
-#define ARGLEN 128
 
-// Function to read a command line from user
-char* read_cmd(char* prompt, FILE* fp) {
+// Read a command line from the user
+char* read_cmd(char* prompt) {
     printf("%s", prompt);
-    char* cmdline = (char*) malloc(sizeof(char) * MAX_LEN);
-    int c, pos = 0;
-
-    while ((c = getc(fp)) != EOF) {
-        if (c == '\n') break;
-        cmdline[pos++] = c;
-    }
-
-    if (c == EOF && pos == 0) {
+    char* cmdline = malloc(MAX_LEN);
+    if (!fgets(cmdline, MAX_LEN, stdin)) {
         free(cmdline);
-        return NULL; // Ctrl+D
+        return NULL; // Ctrl+D pressed
     }
 
-    cmdline[pos] = '\0';
+    size_t len = strlen(cmdline);
+    if (len > 0 && cmdline[len - 1] == '\n') {
+        cmdline[len - 1] = '\0';
+    }
+
     return cmdline;
 }
 
-// Function to split command line into tokens
+// Split command line into arguments
 char** tokenize(char* cmdline) {
-    if (cmdline == NULL || cmdline[0] == '\0' || cmdline[0] == '\n') {
-        return NULL;
-    }
+    if (cmdline == NULL) return NULL;
 
-    char** arglist = (char**)malloc(sizeof(char*) * (MAXARGS + 1));
-    for (int i = 0; i < MAXARGS + 1; i++) {
-        arglist[i] = (char*)malloc(sizeof(char) * ARGLEN);
-        bzero(arglist[i], ARGLEN);
-    }
+    char** args = malloc(sizeof(char*) * (MAXARGS + 1));
+    if (!args) return NULL;
 
-    int argc = 0;
+    int i = 0;
     char* token = strtok(cmdline, " \t");
-    while (token != NULL && argc < MAXARGS) {
-        strcpy(arglist[argc++], token);
+    while (token != NULL && i < MAXARGS) {
+        args[i++] = token; // store pointers into cmdline
         token = strtok(NULL, " \t");
     }
-    arglist[argc][0] = '\0'; // null terminate last arg
-    return arglist;
+    args[i] = NULL;
+    return args;
 }
 
-// Function to handle built-in commands
+// Handle built-in commands: exit, cd
 int handle_builtin(char** args) {
     if (args == NULL || args[0] == NULL) return 0;
 
-    // exit command
     if (strcmp(args[0], "exit") == 0) {
         printf("Exiting shell...\n");
         exit(0);
     }
 
-    // cd command
     if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
             fprintf(stderr, "cd: expected argument\n");
@@ -69,58 +59,31 @@ int handle_builtin(char** args) {
                 perror("cd");
             }
         }
-        return 1; // handled
+        return 1; // handled internally
     }
 
-    return 0; // not built-in
+    return 0; // not a built-in
 }
 
-// Function to execute commands (external or built-in)
+// Execute external commands
 void execute_command(char** args) {
-    if (args == NULL || args[0][0] == '\0') return;
+    if (args == NULL || args[0] == NULL) return;
 
-    // Check for built-in commands first
+    // handle built-ins first
     if (handle_builtin(args)) return;
 
-    // External commands (placeholder)
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork failed");
-        return;
     } else if (pid == 0) {
-        // Child process
+        // child process
         if (execvp(args[0], args) == -1) {
             perror("Command not found");
         }
         exit(1);
     } else {
-        // Parent process waits
+        // parent waits
         wait(NULL);
     }
-}
-
-// Main loop
-int main() {
-    char* cmdline;
-    char** args;
-
-    while (1) {
-        cmdline = read_cmd("FCIT> ", stdin);
-        if (cmdline == NULL) {
-            printf("\n");
-            break; // Ctrl+D
-        }
-        args = tokenize(cmdline);
-        execute_command(args);
-
-        // Free allocated memory
-        free(cmdline);
-        if (args != NULL) {
-            for (int i = 0; i < MAXARGS + 1; i++) free(args[i]);
-            free(args);
-        }
-    }
-
-    return 0;
 }
 
